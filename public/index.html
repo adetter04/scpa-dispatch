@@ -1,0 +1,552 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#FFFFFF" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222126" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Dispatch">
+<meta name="format-detection" content="telephone=no">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
+<title>SCPA Dispatch</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+@font-face{font-family:"Red Hat Text";src:url("/fonts/redhattext-400.woff2") format("woff2");font-weight:400;font-style:normal;font-display:swap}
+@font-face{font-family:"Red Hat Text";src:url("/fonts/redhattext-400-italic.woff2") format("woff2");font-weight:400;font-style:italic;font-display:swap}
+@font-face{font-family:"Red Hat Text";src:url("/fonts/redhattext-500.woff2") format("woff2");font-weight:500;font-style:normal;font-display:swap}
+@font-face{font-family:"Red Hat Text";src:url("/fonts/redhattext-700.woff2") format("woff2");font-weight:700;font-style:normal;font-display:swap}
+@font-face{font-family:"Red Hat Display";src:url("/fonts/redhatdisplay-500.woff2") format("woff2");font-weight:500;font-style:normal;font-display:swap}
+@font-face{font-family:"Red Hat Display";src:url("/fonts/redhatdisplay-700.woff2") format("woff2");font-weight:700;font-style:normal;font-display:swap}
+@font-face{font-family:"Red Hat Mono";src:url("/fonts/redhatmono-400.woff2") format("woff2");font-weight:400;font-style:normal;font-display:swap}
+@font-face{font-family:"Red Hat Mono";src:url("/fonts/redhatmono-500.woff2") format("woff2");font-weight:500;font-style:normal;font-display:swap}
+
+/* tokens: seed e6061275, light + dark palettes, 17px base, 1.2 ratio, 4px unit, 3px max radius */
+:root{
+  --paper:#FFFFFF; --ink:#1F2726; --ink-muted:#5E6363; --rule:#CECFCF; --rule-strong:#848888;
+  --surface:#F4F4F4; --spot:#056E74; --spot-tint:#DAE9EA; --focus:#056E74; --danger:#993941; --on-spot:#FFFFFF;
+  --text:"Red Hat Text",ui-sans-serif,sans-serif;
+  --display:"Red Hat Display","Red Hat Text",sans-serif;
+  --mono:"Red Hat Mono",ui-monospace,monospace;
+  --t-2:11.81px; --t-1:14.17px; --t0:17px; --t1:20.4px; --t2:24.48px;
+  --u:4px; --r:3px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#222126; --ink:#DAE5E2; --ink-muted:#A6AEAD; --rule:#4A4C4F; --rule-strong:#878D8D;
+    --surface:#2B2B2F; --spot:#ADDDE0; --spot-tint:#373D42; --focus:#ADDDE0; --danger:#F88C8F; --on-spot:#222126;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#222126; --ink:#DAE5E2; --ink-muted:#A6AEAD; --rule:#4A4C4F; --rule-strong:#878D8D;
+  --surface:#2B2B2F; --spot:#ADDDE0; --spot-tint:#373D42; --focus:#ADDDE0; --danger:#F88C8F; --on-spot:#222126;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--text);font-size:var(--t0);line-height:1.45;-webkit-text-size-adjust:100%;-webkit-tap-highlight-color:transparent}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+a{color:inherit;text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:.15em}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.mono{font-family:var(--mono)}
+
+/* title block: one hairline-ruled bar, cells divided by vertical rules */
+header{position:sticky;top:0;z-index:20;background:var(--paper);border-bottom:1px solid var(--ink)}
+.bar{display:flex;align-items:stretch;max-width:1500px;margin:0 auto;padding:max(0px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) 0 max(16px,env(safe-area-inset-left))}
+.bar > *{display:flex;align-items:center;padding:calc(var(--u)*2) calc(var(--u)*3);border-left:1px solid var(--rule)}
+.bar > :first-child{padding-left:0;border-left:0}
+.brand{gap:calc(var(--u)*3);min-width:0}
+.brand h1{margin:0;font-family:var(--display);font-size:var(--t1);font-weight:700;line-height:1.1;white-space:nowrap}
+.brand h1 b{font-weight:500}
+.brand small{color:var(--ink-muted);font-size:var(--t-1);font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.live{gap:calc(var(--u)*2);font-size:var(--t-1);font-weight:700}
+.live.err{color:var(--danger)}
+.spacer{flex:1;border-left:0 !important;padding:0 !important}
+.tools{gap:calc(var(--u)*2);padding-right:0 !important}
+.icon-btn{display:inline-flex;align-items:center;justify-content:center;height:36px;min-width:36px;padding:0 calc(var(--u)*2);border:1px solid var(--rule-strong);border-radius:var(--r);background:var(--paper);color:var(--ink);transition:background-color .12s,color .12s,border-color .12s}
+.icon-btn:hover{border-color:var(--ink)}
+.icon-btn[aria-pressed="true"]{background:var(--spot);border-color:var(--spot);color:var(--on-spot)}
+.icon-btn svg{width:18px;height:18px}
+.ring{position:relative;width:36px;height:36px;padding:0 !important;border:0 !important}
+.ring svg{transform:rotate(-90deg)}
+.ring span{position:absolute;inset:0;display:grid;place-items:center;font-family:var(--mono);font-size:var(--t-2);font-variant-numeric:tabular-nums;color:var(--ink)}
+
+/* controls */
+.controls{max-width:1500px;margin:0 auto;padding:calc(var(--u)*4) 16px 0;display:grid;gap:calc(var(--u)*3)}
+.sources{display:grid;grid-template-columns:repeat(auto-fit,minmax(176px,1fr));border-top:1px solid var(--rule);border-left:1px solid var(--rule)}
+.src{display:grid;grid-template-columns:1fr auto;align-items:center;column-gap:calc(var(--u)*3);padding:calc(var(--u)*2) calc(var(--u)*3);border:0;border-right:1px solid var(--rule);border-bottom:1px solid var(--rule);border-radius:0;background:var(--paper);text-align:left;transition:background-color .12s}
+.src:hover{background:var(--surface)}
+.src[aria-pressed="false"] .nm,.src[aria-pressed="false"] .ct{color:var(--ink-muted);text-decoration:line-through;text-decoration-thickness:1px}
+.src .nm{font-weight:700;font-size:var(--t-1);line-height:1.2}
+.src .meta{font-size:var(--t-2);color:var(--ink-muted);line-height:1.3}
+.src[data-status="error"] .meta,.src[data-status="stale"] .meta,.src[data-status="unparsed"] .meta{color:var(--danger);font-weight:700}
+.src .ct{grid-row:1 / span 2;grid-column:2;font-family:var(--mono);font-size:var(--t1);font-weight:500;font-variant-numeric:tabular-nums;min-width:2ch;text-align:right}
+.row2{display:flex;gap:calc(var(--u)*3);align-items:stretch;flex-wrap:wrap}
+.cats{display:flex;border:1px solid var(--rule-strong);border-radius:var(--r);overflow-x:auto;scrollbar-width:none;max-width:100%}
+.cat{display:flex;align-items:center;gap:calc(var(--u)*2);padding:calc(var(--u)*2) calc(var(--u)*3);border:0;border-left:1px solid var(--rule);background:var(--paper);font-size:var(--t-1);font-weight:500;white-space:nowrap;transition:background-color .12s,color .12s}
+.cat:first-child{border-left:0}
+.cat em{font-style:normal;font-family:var(--mono);font-size:var(--t-2);font-variant-numeric:tabular-nums;color:var(--ink-muted)}
+.cat[aria-pressed="true"]{background:var(--spot);color:var(--on-spot)}
+.cat[aria-pressed="true"] em{color:var(--on-spot)}
+.search{flex:1;min-width:200px;position:relative}
+.search input{width:100%;height:40px;padding:0 calc(var(--u)*3) 0 calc(var(--u)*9);border-radius:var(--r);border:1px solid var(--rule-strong);background:var(--paper);font-size:16px}
+.search input::placeholder{color:var(--ink-muted)}
+.search svg{position:absolute;left:12px;top:12px;width:16px;height:16px;color:var(--ink-muted)}
+
+/* layout: list first; map beside it when on */
+main{max-width:1500px;margin:0 auto;padding:calc(var(--u)*4) 16px calc(var(--u)*10);display:grid;gap:calc(var(--u)*4);grid-template-columns:1fr}
+body.map-on main{grid-template-columns:minmax(0,1fr) minmax(0,1.1fr)}
+#mapWrap{display:none;position:sticky;top:72px;height:calc(100vh - 88px);border:1px solid var(--rule-strong);overflow:hidden;background:var(--surface)}
+body.map-on #mapWrap{display:block}
+#map{width:100%;height:100%}
+@media (max-width:900px){
+  body.map-on main{grid-template-columns:1fr}
+  body.map-on #mapWrap{position:relative;top:0;height:46vh;order:-1}
+  .brand small{display:none}
+}
+@media (max-width:520px){
+  .bar > *{padding-left:calc(var(--u)*2);padding-right:calc(var(--u)*2)}
+  .brand h1{font-size:var(--t0)}
+  .live{display:none}
+  .live.err{display:flex}
+  .tools{gap:var(--u)}
+  .sources{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .src:last-child:nth-child(odd){grid-column:1 / -1}
+}
+
+/* section heads: run-in bold, size step, rule above */
+.section-h{display:flex;align-items:baseline;gap:calc(var(--u)*2);margin:0 0 calc(var(--u)*2);padding-top:calc(var(--u)*2);border-top:1px solid var(--ink);font-family:var(--display);font-size:var(--t0);font-weight:700}
+details.cleared-box{margin-top:calc(var(--u)*8)}
+details.cleared-box summary{cursor:pointer;list-style:none}
+details.cleared-box summary::-webkit-details-marker{display:none}
+
+/* incident sheet: cells share hairlines like a drawing grid */
+.list{display:grid;gap:0;border-top:1px solid var(--rule);border-left:1px solid var(--rule)}
+body:not(.map-on) .list{grid-template-columns:repeat(auto-fill,minmax(360px,1fr))}
+@media (max-width:420px){body:not(.map-on) .list{grid-template-columns:1fr}}
+.card{position:relative;border-right:1px solid var(--rule);border-bottom:1px solid var(--rule);background:var(--paper);transition:background-color .12s}
+.card:hover{background:var(--surface)}
+.card .body{padding:calc(var(--u)*3) calc(var(--u)*4) calc(var(--u)*4);min-width:0;display:grid;gap:calc(var(--u)*1.5)}
+.card .kind{display:flex;flex-wrap:wrap;align-items:baseline;gap:calc(var(--u)*2);font-size:var(--t-2);color:var(--ink-muted)}
+.card .kind b{color:var(--ink);font-weight:700}
+.card .top{display:flex;align-items:flex-start;gap:calc(var(--u)*3)}
+.card .type{font-family:var(--display);font-weight:700;font-size:var(--t0);line-height:1.2;flex:1;min-width:0}
+.card .when{text-align:right;font-family:var(--mono);font-size:var(--t-2);font-variant-numeric:tabular-nums;color:var(--ink-muted);white-space:nowrap;line-height:1.35}
+.card .when b{display:block;color:var(--ink);font-size:var(--t-1);font-weight:500}
+.card .where{font-size:var(--t-1);font-weight:500;color:var(--ink);word-break:break-word;font-variant-numeric:tabular-nums}
+.card .muni{font-size:var(--t-1);color:var(--ink)}
+.card .muni span{color:var(--ink-muted)}
+.card .place{font-size:var(--t-1);font-style:italic;color:var(--ink)}
+.card .agencies{font-size:var(--t-2);color:var(--ink-muted)}
+.card .paged{font-size:var(--t-2);color:var(--ink-muted)}
+.units{display:flex;flex-wrap:wrap;gap:var(--u);margin-top:var(--u)}
+.unit{font-family:var(--mono);font-size:var(--t-2);padding:0 calc(var(--u)*1.5);border:1px solid var(--rule-strong);border-radius:var(--r);color:var(--ink);line-height:1.6}
+.tags{display:flex;flex-wrap:wrap;gap:var(--u)}
+.tag{font-size:var(--t-2);font-weight:700;padding:0 calc(var(--u)*1.5);border-radius:var(--r);line-height:1.6}
+.tag.new{background:var(--spot);color:var(--on-spot)}
+.tag.major{background:var(--ink);color:var(--paper)}
+.tag.watch{border:1px solid var(--ink);color:var(--ink)}
+.card.major .type{font-size:var(--t1)}
+.card.focus{outline:2px solid var(--focus);outline-offset:-2px}
+.card .locate{border:0;background:none;padding:0;color:var(--ink);font-size:var(--t-2);text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:.15em;justify-self:start}
+.card.cleared .type,.card.cleared .where{color:var(--ink-muted)}
+.card.cleared .type{text-decoration:line-through;text-decoration-thickness:1px}
+
+.empty{grid-column:1 / -1;padding:calc(var(--u)*10) calc(var(--u)*5);border-right:1px solid var(--rule);border-bottom:1px solid var(--rule);color:var(--ink-muted);font-size:var(--t-1)}
+.banner{max-width:1500px;margin:calc(var(--u)*3) auto 0;padding:0 16px}
+.banner div{padding:calc(var(--u)*3);border:1px solid var(--danger);border-radius:var(--r);color:var(--danger);font-size:var(--t-1);font-weight:500}
+
+/* settings dialog */
+dialog{border:1px solid var(--ink);border-radius:var(--r);background:var(--paper);color:var(--ink);padding:0;width:min(520px,calc(100vw - 32px));box-shadow:0 8px 24px rgba(0,0,0,.18)}
+dialog::backdrop{background:rgba(0,0,0,.45)}
+.dlg{padding:calc(var(--u)*5);display:grid;gap:calc(var(--u)*4)}
+.dlg h2{margin:0;font-family:var(--display);font-size:var(--t1);font-weight:700}
+.dlg label{display:grid;gap:calc(var(--u)*1.5);font-size:var(--t-1);font-weight:500}
+.dlg textarea,.dlg select{width:100%;padding:calc(var(--u)*2) calc(var(--u)*3);border-radius:var(--r);border:1px solid var(--rule-strong);background:var(--paper);color:var(--ink);font-family:var(--mono);font-size:16px}
+.dlg textarea{min-height:80px;resize:vertical}
+.dlg select{font-family:var(--text)}
+.dlg .chk{display:flex;align-items:center;gap:calc(var(--u)*2);font-weight:400}
+.dlg .chk input{accent-color:var(--spot);width:18px;height:18px}
+.dlg .actions{display:flex;justify-content:flex-end;gap:calc(var(--u)*2)}
+.dlg .hint{font-size:var(--t-2);font-weight:400;color:var(--ink-muted);margin:0}
+.primary{background:var(--spot);color:var(--on-spot);border:1px solid var(--spot);border-radius:var(--r);padding:calc(var(--u)*2) calc(var(--u)*5);font-weight:700}
+.ghost{background:var(--paper);border:1px solid var(--rule-strong);border-radius:var(--r);padding:calc(var(--u)*2) calc(var(--u)*4)}
+footer{max-width:1500px;margin:0 auto;padding:calc(var(--u)*4) 16px max(32px,calc(env(safe-area-inset-bottom) + 16px));border-top:1px solid var(--rule);color:var(--ink-muted);font-size:var(--t-2);line-height:1.6}
+footer > *{max-width:72ch}
+footer a{color:var(--ink)}
+
+/* map */
+.leaflet-container{background:var(--surface);font-family:var(--text)}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .leaflet-tile-pane{filter:invert(1) hue-rotate(180deg) brightness(.85) contrast(.9) saturate(.6)}}
+:root[data-theme="dark"] .leaflet-tile-pane{filter:invert(1) hue-rotate(180deg) brightness(.85) contrast(.9) saturate(.6)}
+.leaflet-popup-content-wrapper,.leaflet-popup-tip{background:var(--paper);color:var(--ink);border:1px solid var(--ink);border-radius:var(--r)}
+.leaflet-popup-content{margin:calc(var(--u)*3);font-size:var(--t-1)}
+.leaflet-bar a{border-radius:0 !important}
+.pin{width:12px;height:12px;background:var(--ink);border:2px solid var(--paper);outline:1px solid var(--ink)}
+.pin.approx{background:var(--paper);border-style:dashed}
+.pin.major{width:16px;height:16px;background:var(--spot);outline-color:var(--spot)}
+
+@media (prefers-reduced-motion: reduce){*{transition:none !important}}
+</style>
+</head>
+<body>
+<header>
+  <div class="bar">
+    <div class="brand">
+      <h1>SCPA <b>Dispatch</b></h1>
+      <small id="updated">connecting…</small>
+    </div>
+    <span class="live" id="live"><span id="liveTxt">Live</span></span>
+    <div class="spacer"></div>
+    <div class="tools">
+      <div class="ring" title="Next refresh"><svg width="36" height="36" viewBox="0 0 34 34"><circle cx="17" cy="17" r="14" fill="none" stroke="var(--rule)" stroke-width="3"/><circle id="ringArc" cx="17" cy="17" r="14" fill="none" stroke="var(--ink)" stroke-width="3" stroke-dasharray="87.96" stroke-dashoffset="0"/></svg><span id="ringTxt">60</span></div>
+      <button class="icon-btn" id="btnMap" aria-pressed="false" title="Map"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2Z"/><path d="M9 4v14M15 6v14"/></svg></button>
+      <button class="icon-btn" id="btnSound" aria-pressed="false" title="Alert sound"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 5 6 9H3v6h3l5 4V5Z"/><path d="M16 9a4 4 0 0 1 0 6M19 6a8 8 0 0 1 0 12"/></svg></button>
+      <button class="icon-btn" id="btnSettings" title="Alerts &amp; settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg></button>
+    </div>
+  </div>
+</header>
+
+<div class="banner" id="banner" hidden><div id="bannerTxt"></div></div>
+
+<section class="controls">
+  <div class="sources" id="sources"></div>
+  <div class="row2">
+    <div class="cats" id="cats"></div>
+    <div class="search">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+      <input id="q" type="search" placeholder="Filter: type, street, township, unit…" autocomplete="off">
+    </div>
+  </div>
+</section>
+
+<main>
+  <div>
+    <div class="section-h" id="activeH">Active</div>
+    <div class="list" id="list"></div>
+    <details class="cleared-box" id="clearedBox" hidden>
+      <summary class="section-h" id="clearedH">Recently cleared</summary>
+      <div class="list" id="cleared"></div>
+    </details>
+  </div>
+  <div id="mapWrap"><div id="map"></div></div>
+</main>
+
+<footer>
+  Lancaster, Chester and Cumberland publish their active-incident lists; York and Lebanon are pager logs, so their calls show for two hours after the last page instead of clearing. Feeds are delayed and leave out most police calls. Berks and Dauphin publish nothing public. Not for emergency use.
+  <span id="srcLinks"></span>
+</footer>
+
+<dialog id="dlg">
+  <form method="dialog" class="dlg" id="dlgForm">
+    <h2>Alerts</h2>
+    <label>Watch keywords <span class="hint">Comma-separated. Matches type, street, township, or unit. A match flags the card and fires the alert.</span>
+      <textarea id="fWatch" placeholder="STRUCTURE FIRE, MANHEIM TOWNSHIP, MEDIC 06, ENTRAPMENT"></textarea>
+    </label>
+    <label class="chk"><input type="checkbox" id="fMajor"> Also alert on every major incident (working fires, arrests, entrapments, MCI…)</label>
+    <label class="chk"><input type="checkbox" id="fNotify"> Notifications</label>
+    <p class="hint" id="iosHint" hidden>On iPhone, notifications need the app added to the Home Screen (Share → Add to Home Screen) and opened from that icon. They arrive only while it's open or recently backgrounded, because there's no push server.</p>
+    <label>Refresh interval
+      <select id="fInterval"><option value="30">30 seconds</option><option value="60">60 seconds</option><option value="120">2 minutes</option></select>
+    </label>
+    <label>Theme
+      <select id="fTheme"><option value="">Match system</option><option value="dark">Dark</option><option value="light">Light</option></select>
+    </label>
+    <p class="hint">Settings and the cleared-call history live in this browser only.</p>
+    <div class="actions"><button class="ghost" value="cancel">Cancel</button><button class="primary" value="save" id="dlgSave">Save</button></div>
+  </form>
+</dialog>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+(() => {
+'use strict';
+const API = (window.CAD_API || '') + '/api/incidents';
+const CATS = [['all','All'],['fire','Fire'],['medical','EMS'],['traffic','Traffic'],['rescue','Rescue'],['police','Police'],['other','Other']];
+const CAT_LABEL = Object.fromEntries(CATS);
+const NEW_MS = 5 * 60 * 1000;
+const CLEARED_KEEP_MS = 6 * 3600 * 1000;
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+const store = {
+  get(k, d) { try { const v = localStorage.getItem('cad:' + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem('cad:' + k, JSON.stringify(v)); } catch {} },
+};
+const settings = Object.assign({ watch: '', alertMajor: true, notify: false, sound: false, interval: 60, theme: '', map: false, off: [], cat: 'all' }, store.get('settings', {}));
+const saveSettings = () => store.set('settings', settings);
+
+// firstSeen: id -> ms; active: id -> incident (last known); cleared: [{...inc, clearedAt}]
+let firstSeen = store.get('firstSeen', {});
+let lastActive = store.get('active', {});
+let cleared = store.get('cleared', []);
+let data = null, firstLoad = true, focusId = null, timer = null, nextAt = 0;
+
+const applyTheme = () => { if (settings.theme) document.documentElement.dataset.theme = settings.theme; else delete document.documentElement.dataset.theme; };
+applyTheme();
+
+const clock = (iso) => iso ? new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : 'time unknown';
+function ago(iso) {
+  if (!iso) return '';
+  const m = Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 60000));
+  if (m < 1) return 'now'; if (m < 60) return m + 'm';
+  const h = Math.floor(m / 60); return h + 'h ' + (m % 60) + 'm';
+}
+const dur = (a, b) => { const m = Math.max(0, Math.round((b - a) / 60000)); return m < 60 ? m + 'm' : Math.floor(m / 60) + 'h ' + (m % 60) + 'm'; };
+const watchTerms = () => settings.watch.split(',').map((s) => s.trim().toUpperCase()).filter(Boolean);
+const hay = (i) => [i.type, i.place, i.location, i.municipality, i.county, i.box, ...(i.units || []), ...(i.agencies || [])].join(' ').toUpperCase();
+const watchHit = (i) => { const h = hay(i); return watchTerms().some((t) => h.includes(t)); };
+
+let actx = null;
+function beep(major) {
+  if (!settings.sound) return;
+  try {
+    actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+    const tones = major ? [880, 660, 880, 660] : [740, 990];
+    tones.forEach((f, k) => {
+      const o = actx.createOscillator(), g = actx.createGain();
+      o.type = 'square'; o.frequency.value = f;
+      g.gain.setValueAtTime(0.0001, actx.currentTime + k * 0.18);
+      g.gain.exponentialRampToValueAtTime(0.12, actx.currentTime + k * 0.18 + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, actx.currentTime + k * 0.18 + 0.16);
+      o.connect(g).connect(actx.destination); o.start(actx.currentTime + k * 0.18); o.stop(actx.currentTime + k * 0.18 + 0.17);
+    });
+  } catch {}
+}
+function notify(i) {
+  if (!settings.notify || !('Notification' in window) || Notification.permission !== 'granted') return;
+  try {
+    const n = new Notification(`${i.type}, ${i.county} Co.`, { body: `${i.location}\n${i.municipality}${i.units.length ? '\n' + i.units.join(', ') : ''}`, tag: i.id, silent: true });
+    n.onclick = () => { window.focus(); focusIncident(i.id); n.close(); };
+  } catch {}
+}
+
+async function poll() {
+  clearTimeout(timer);
+  try {
+    const r = await fetch(API, { cache: 'no-store' });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    ingest(await r.json());
+    $('#banner').hidden = true; $('#live').classList.remove('err'); $('#liveTxt').textContent = 'Live';
+  } catch (e) {
+    $('#banner').hidden = false;
+    $('#bannerTxt').textContent = `Can't reach the monitor's API (${e.message}). Retrying. If this keeps happening, the server isn't running or /api/incidents isn't deployed.`;
+    $('#live').classList.add('err'); $('#liveTxt').textContent = 'Offline';
+  }
+  nextAt = Date.now() + settings.interval * 1000;
+  timer = setTimeout(poll, settings.interval * 1000);
+}
+
+function ingest(d) {
+  const now = Date.now();
+  const okSources = new Set(d.sources.filter((s) => s.ok).map((s) => s.id));
+  const ids = new Set(d.incidents.map((i) => i.id));
+  const fresh = [];
+  for (const i of d.incidents) {
+    if (!firstSeen[i.id]) { firstSeen[i.id] = firstLoad && Object.keys(lastActive).length === 0 ? 0 : now; if (firstSeen[i.id]) fresh.push(i); }
+  }
+  // anything we were tracking that vanished from a healthy source = cleared
+  // (skipped when our last snapshot is old, since we can't know when those calls actually cleared)
+  const snapFresh = now - store.get('activeAt', 0) < 10 * 60000;
+  if (snapFresh) for (const [id, inc] of Object.entries(lastActive)) {
+    if (!ids.has(id) && inc.feed !== 'pager' && okSources.has(inc.source)) cleared.unshift({ ...inc, clearedAt: now });
+  }
+  store.set('activeAt', now);
+  cleared = cleared.filter((c, k, a) => now - c.clearedAt < CLEARED_KEEP_MS && a.findIndex((x) => x.id === c.id) === k && !ids.has(c.id)).slice(0, 150);
+  lastActive = {};
+  for (const i of d.incidents) lastActive[i.id] = i;
+  for (const id of Object.keys(firstSeen)) if (!ids.has(id) && now - (firstSeen[id] || 0) > 2 * 86400000) delete firstSeen[id];
+  store.set('firstSeen', firstSeen); store.set('active', lastActive); store.set('cleared', cleared);
+
+  if (!firstLoad) {
+    const alerting = fresh.filter((i) => watchHit(i) || (settings.alertMajor && i.major));
+    if (alerting.length) { beep(alerting.some((i) => i.major)); alerting.slice(0, 4).forEach(notify); }
+    if (fresh.length) document.title = `(${fresh.length}) SCPA Dispatch`;
+  }
+  firstLoad = false;
+  data = d;
+  render();
+}
+
+function visible(list) {
+  const q = $('#q').value.trim().toUpperCase();
+  return list.filter((i) => !settings.off.includes(i.source)
+    && (settings.cat === 'all' || i.category === settings.cat)
+    && (!q || hay(i).includes(q)));
+}
+function card(i, isCleared) {
+  const isNew = !isCleared && firstSeen[i.id] && Date.now() - firstSeen[i.id] < NEW_MS;
+  const w = watchHit(i);
+  const tags = [isNew && '<span class="tag new">New</span>', i.major && '<span class="tag major">Major</span>', w && '<span class="tag watch">Watch</span>'].filter(Boolean).join('');
+  const when = isCleared
+    ? `<b>Cleared</b>${clock(new Date(i.clearedAt).toISOString())}${i.time ? ' · ' + dur(Date.parse(i.time), i.clearedAt) : ''}`
+    : `<b data-ago="${esc(i.time || '')}">${ago(i.time)}</b>${clock(i.time)}`;
+  return `<article class="card ${i.major ? 'major' : ''} ${isCleared ? 'cleared' : ''} ${focusId === i.id ? 'focus' : ''}" data-id="${esc(i.id)}" data-cat="${esc(i.category)}">
+    <div class="body">
+      <div class="kind"><b>${CAT_LABEL[i.category] || 'Other'}</b></div>
+      <div class="top"><div class="type">${esc(i.type)}</div><div class="when">${when}</div></div>
+      ${tags ? `<div class="tags">${tags}</div>` : ''}
+      ${i.place ? `<div class="place">${esc(i.place)}</div>` : ''}
+      <div class="where">${esc(i.location || 'No location given')}</div>
+      <div class="muni">${esc(i.municipality || '')}${i.municipality ? ' <span>·</span> ' : ''}<span>${esc(i.county)} Co.</span>${i.number ? ` <span>· #${esc(i.number)}</span>` : ''}${i.box ? ` <span>· Box ${esc(i.box)}</span>` : ''}</div>
+      ${i.agencies?.length ? `<div class="agencies">${i.agencies.map(esc).join(' · ')}</div>` : ''}
+      ${i.feed === 'pager' && !isCleared ? `<div class="paged">pager log · last page <span data-ago="${esc(i.lastPaged || i.time || '')}">${ago(i.lastPaged || i.time)}</span> ago</div>` : ''}
+      ${i.units?.length ? `<div class="units">${i.units.map((u) => `<span class="unit">${esc(u)}</span>`).join('')}</div>` : ''}
+      ${settings.map && !isCleared ? `<div><button class="locate" data-locate="${esc(i.id)}">Show on map</button></div>` : ''}
+    </div>
+  </article>`;
+}
+function render() {
+  if (!data) return;
+  // sources
+  $('#sources').innerHTML = data.sources.map((s) => {
+    let label = { ok: s.agency, stale: 'stale feed', unparsed: 'page changed', error: 'unreachable' }[s.status] || s.status;
+    if (s.status === 'ok' && s.feed === 'pager') label = s.latest ? `pager · ${ago(s.latest)} ago` : 'pager · no pages';
+    const quiet = s.status === 'ok' && s.feed === 'pager' && s.latest && Date.now() - Date.parse(s.latest) > 3 * 3600000;
+    return `<button class="src" data-src="${s.id}" data-status="${quiet ? 'quiet' : s.status}" aria-pressed="${!settings.off.includes(s.id)}" title="${esc(s.error || s.agency)}.${s.feed === 'pager' ? ' Pager log: calls show for ' + (data.pagerWindowMin || 120) + ' min after the last page.' : ''}${quiet ? ' No pages for over 3 h, so the decoder feeding this page may be down.' : ''} Checked ${clock(s.fetchedAt)}.">
+      <span><div class="nm">${esc(s.county)}</div><div class="meta">${esc(label)}</div></span><span class="ct">${s.status === 'ok' ? s.count : '–'}</span></button>`;
+  }).join('');
+  // categories
+  const base = data.incidents.filter((i) => !settings.off.includes(i.source));
+  $('#cats').innerHTML = CATS.map(([k, l]) => {
+    const n = k === 'all' ? base.length : base.filter((i) => i.category === k).length;
+    if (k !== 'all' && !n && settings.cat !== k) return '';
+    return `<button class="cat" data-cat="${k}" aria-pressed="${settings.cat === k}">${l}<em>${n}</em></button>`;
+  }).join('');
+  // lists
+  const act = visible(data.incidents);
+  const majors = act.filter((i) => i.major), rest = act.filter((i) => !i.major);
+  $('#activeH').textContent = `Active · ${act.length}`;
+  $('#list').innerHTML = act.length ? [...majors, ...rest].map((i) => card(i)).join('') : `<div class="empty">${data.incidents.length ? 'Nothing matches these filters.' : 'No active incidents reported right now.'}</div>`;
+  const cl = visible(cleared);
+  $('#clearedBox').hidden = !cl.length;
+  $('#clearedH').textContent = `Recently cleared · ${cl.length}`;
+  $('#cleared').innerHTML = cl.map((i) => card(i, true)).join('');
+  $('#updated').textContent = `updated ${clock(data.generatedAt)} · Lancaster, York, Chester, Lebanon, Cumberland`;
+  $('#srcLinks').innerHTML = ' Sources: ' + data.sources.map((s) => `<a href="${esc(s.web)}" target="_blank" rel="noopener">${esc(s.county)}</a>`).join(' · ') + '.';
+  if (settings.map) syncMap(act);
+}
+
+// map (Leaflet + throttled, cached Nominatim geocoding)
+let map = null, layer = null, geoQueue = [], geoBusy = false, userMoved = false, fitTimer = null;
+function fitAll() {
+  clearTimeout(fitTimer);
+  fitTimer = setTimeout(() => { if (!map || userMoved || markers.size < 1) return; map.invalidateSize(); map.fitBounds(L.featureGroup([...markers.values()]).getBounds().pad(0.12), { maxZoom: 12, animate: false }); }, 250);
+}
+const markers = new Map();
+let geo = store.get('geo', {});
+const PA_BOX = '-78.6,41.0,-75.3,39.6'; // viewbox: south-central / southeast PA
+function initMap() {
+  if (map || !window.L) return;
+  map = L.map('map', { zoomControl: true, attributionControl: true }).setView([40.05, -76.75], 9);
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+  }).addTo(map);
+  layer = L.layerGroup().addTo(map);
+  map.on('dragstart', () => { userMoved = true; });
+  map.getContainer().addEventListener('wheel', () => { userMoved = true; }, { passive: true });
+  map.getContainer().addEventListener('touchstart', (e) => { if (e.touches.length > 1) userMoved = true; }, { passive: true });
+}
+function geoKeys(i) {
+  const county = `${i.county} County, Pennsylvania`;
+  const muni = i.municipality ? `${i.municipality.replace(/\bTwp\b/i, 'Township')}, ` : '';
+  const street = (i.location || '').split(/\s*(?:&|\/| AND )\s*/)[0].replace(/^\d+\s+BLK\s+/i, '').trim();
+  const keys = [];
+  if (street) keys.push({ q: `${street}, ${muni}${county}`, approx: !/&|\//.test(i.location) ? false : true });
+  if (muni) keys.push({ q: `${muni}${county}`, approx: true });
+  keys.push({ q: county, approx: true });
+  return keys;
+}
+function lookup(i) { if (Number.isFinite(i.lat) && Number.isFinite(i.lon)) return { lat: i.lat, lon: i.lon, approx: false }; for (const k of geoKeys(i)) { const g = geo[k.q]; if (g && g.lat) return { ...g, approx: k.approx || g.approx }; if (g === undefined) return undefined; } return null; }
+function enqueue(i) { if (!geoQueue.some((x) => x.id === i.id)) geoQueue.push(i); runGeo(); }
+async function runGeo() {
+  if (geoBusy || !geoQueue.length) return;
+  geoBusy = true;
+  const i = geoQueue.shift();
+  const k = geoKeys(i).find((k) => geo[k.q] === undefined);
+  if (k) {
+    try {
+      const u = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=us&viewbox=${PA_BOX}&bounded=1&q=${encodeURIComponent(k.q)}`;
+      const r = await fetch(u, { headers: { Accept: 'application/json' } });
+      const j = r.ok ? await r.json() : [];
+      geo[k.q] = j[0] ? { lat: +j[0].lat, lon: +j[0].lon } : {};
+      store.set('geo', geo);
+    } catch { geo[k.q] = {}; }
+    if (lookup(i) === undefined) geoQueue.unshift(i); // try the next, coarser key
+    else placeMarker(i);
+  }
+  setTimeout(() => { geoBusy = false; runGeo(); }, 1100); // Nominatim policy: ≤1 req/s
+}
+function placeMarker(i) {
+  const g = lookup(i); if (!g || !g.lat || !layer) return;
+  const icon = L.divIcon({ className: '', html: `<div class="pin ${g.approx ? 'approx' : ''} ${i.major ? 'major' : ''}"></div>`, iconSize: [18, 18], iconAnchor: [9, 9] });
+  const m = L.marker([g.lat, g.lon], { icon }).bindPopup(`<b>${esc(i.type)}</b> <span>(${CAT_LABEL[i.category] || 'Other'})</span><br>${i.place ? esc(i.place) + '<br>' : ''}<span class="mono">${esc(i.location)}</span><br>${esc(i.municipality)} · ${esc(i.county)} Co.${g.approx ? '<br><i>approximate location</i>' : ''}`);
+  m.on('click', () => focusIncident(i.id, false));
+  markers.get(i.id)?.remove(); markers.set(i.id, m); m.addTo(layer); fitAll();
+}
+function syncMap(list) {
+  initMap(); if (!map) return;
+  const want = new Set(list.map((i) => i.id));
+  for (const [id, m] of markers) if (!want.has(id)) { m.remove(); markers.delete(id); }
+  for (const i of list) { const g = lookup(i); if (g === undefined) enqueue(i); else if (g && !markers.has(i.id)) placeMarker(i); }
+  setTimeout(() => {
+    map.invalidateSize();
+    fitAll();
+  }, 50);
+}
+function focusIncident(id, pan = true) {
+  focusId = id; render();
+  const el = document.querySelector(`.card[data-id="${CSS.escape(id)}"]`);
+  el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  const m = markers.get(id);
+  if (pan && m && map) { userMoved = true; map.setView(m.getLatLng(), 14); m.openPopup(); }
+}
+
+setInterval(() => {
+  document.querySelectorAll('[data-ago]').forEach((el) => { el.textContent = ago(el.dataset.ago); });
+  const left = Math.max(0, nextAt - Date.now()), frac = left / (settings.interval * 1000);
+  $('#ringArc').setAttribute('stroke-dashoffset', String(87.96 * (1 - frac)));
+  $('#ringTxt').textContent = Math.ceil(left / 1000);
+}, 1000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) { document.title = 'SCPA Dispatch'; if (nextAt - Date.now() > 5000 && Date.now() - (Date.parse(data?.generatedAt) || 0) > 45000) poll(); } });
+
+$('#sources').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-src]'); if (!b) return;
+  const id = b.dataset.src;
+  settings.off = settings.off.includes(id) ? settings.off.filter((x) => x !== id) : [...settings.off, id];
+  saveSettings(); render();
+});
+$('#cats').addEventListener('click', (e) => { const b = e.target.closest('[data-cat]'); if (!b) return; settings.cat = b.dataset.cat; saveSettings(); render(); });
+$('#q').addEventListener('input', render);
+document.addEventListener('click', (e) => { const b = e.target.closest('[data-locate]'); if (b) focusIncident(b.dataset.locate); });
+const setMap = (on) => { settings.map = on; saveSettings(); document.body.classList.toggle('map-on', on); $('#btnMap').setAttribute('aria-pressed', on); render(); };
+$('#btnMap').addEventListener('click', () => setMap(!settings.map));
+const setSound = (on) => { settings.sound = on; saveSettings(); $('#btnSound').setAttribute('aria-pressed', on); if (on) { settings.sound = true; beep(false); } };
+$('#btnSound').addEventListener('click', () => setSound(!settings.sound));
+$('#btnSettings').addEventListener('click', () => {
+  $('#fWatch').value = settings.watch; $('#fMajor').checked = settings.alertMajor; $('#fNotify').checked = settings.notify;
+  $('#iosHint').hidden = !/iPhone|iPad/.test(navigator.userAgent);
+  $('#fInterval').value = String(settings.interval); $('#fTheme').value = settings.theme; $('#dlg').showModal();
+});
+$('#dlgForm').addEventListener('submit', async (e) => {
+  if (e.submitter?.value !== 'save') return;
+  settings.watch = $('#fWatch').value; settings.alertMajor = $('#fMajor').checked;
+  settings.interval = +$('#fInterval').value; settings.theme = $('#fTheme').value;
+  settings.notify = $('#fNotify').checked;
+  if (settings.notify && 'Notification' in window && Notification.permission === 'default') {
+    try { settings.notify = (await Notification.requestPermission()) === 'granted'; } catch { settings.notify = false; }
+  }
+  saveSettings(); applyTheme(); render(); poll();
+});
+
+document.body.classList.toggle('map-on', settings.map);
+$('#btnMap').setAttribute('aria-pressed', settings.map);
+$('#btnSound').setAttribute('aria-pressed', settings.sound);
+poll();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+{
+  "name": "scpa-cad-monitor",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Live 911 CAD monitor for Lancaster County, PA and neighboring counties",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node test/parse.test.mjs",
+    "dev:cf": "npx wrangler dev",
+    "deploy": "npx wrangler deploy"
+  },
+  "engines": { "node": ">=18" }
+}
