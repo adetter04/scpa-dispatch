@@ -236,7 +236,7 @@ footer a{color:var(--ink)}
 </main>
 
 <footer>
-  Lancaster, Chester and Cumberland publish their active-incident lists; York and Lebanon are pager logs, so their calls show for two hours after the last page instead of clearing. Feeds are delayed and leave out most police calls. Berks and Dauphin publish nothing public. Not for emergency use.
+  Lancaster, York, Chester and Cumberland publish their active-incident lists. Lebanon and the York pager log are pager logs, so their calls show for two hours after the last page instead of clearing. York pager matches add units and exact map locations to York's own calls. Feeds are delayed and leave out most police calls. Berks and Dauphin publish nothing public. Not for emergency use.
   <span id="srcLinks"></span>
 </footer>
 
@@ -407,7 +407,7 @@ function render() {
     if (s.status === 'ok' && s.feed === 'pager') label = s.latest ? `pager · ${ago(s.latest)} ago` : 'pager · no pages';
     const quiet = s.status === 'ok' && s.feed === 'pager' && s.latest && Date.now() - Date.parse(s.latest) > 3 * 3600000;
     return `<button class="src" data-src="${s.id}" data-status="${quiet ? 'quiet' : s.status}" aria-pressed="${!settings.off.includes(s.id)}" title="${esc(s.error || s.agency)}.${s.feed === 'pager' ? ' Pager log: calls show for ' + (data.pagerWindowMin || 120) + ' min after the last page.' : ''}${quiet ? ' No pages for over 3 h, so the decoder feeding this page may be down.' : ''} Checked ${clock(s.fetchedAt)}.">
-      <span><div class="nm">${esc(s.county)}</div><div class="meta">${esc(label)}</div></span><span class="ct">${s.status === 'ok' ? s.count : '–'}</span></button>`;
+      <span><div class="nm">${esc(s.label || s.county)}</div><div class="meta">${esc(label)}</div></span><span class="ct">${s.status === 'ok' ? s.count : '–'}</span></button>`;
   }).join('');
   // categories
   const base = data.incidents.filter((i) => !settings.off.includes(i.source));
@@ -426,7 +426,7 @@ function render() {
   $('#clearedH').textContent = `Recently cleared · ${cl.length}`;
   $('#cleared').innerHTML = cl.map((i) => card(i, true)).join('');
   $('#updated').textContent = `updated ${clock(data.generatedAt)} · Lancaster, York, Chester, Lebanon, Cumberland`;
-  $('#srcLinks').innerHTML = ' Sources: ' + data.sources.map((s) => `<a href="${esc(s.web)}" target="_blank" rel="noopener">${esc(s.county)}</a>`).join(' · ') + '.';
+  $('#srcLinks').innerHTML = ' Sources: ' + data.sources.map((s) => `<a href="${esc(s.web)}" target="_blank" rel="noopener">${esc(s.label || s.county)}</a>`).join(' · ') + '.';
   if (settings.map) syncMap(act);
 }
 

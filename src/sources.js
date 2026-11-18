@@ -16,7 +16,14 @@ export const SOURCES = [
     web: 'https://webcad.lcwc911.us/Pages/Public/LiveIncidents.aspx',
   },
   {
-    id: 'york', county: 'York', agency: 'York Fire Page', kind: 'pdw-york', feed: 'pager',
+    id: 'york', county: 'York', agency: 'York County 911', kind: 'ycdes', feed: 'cad',
+    url: 'https://ycdes.org/webcad/default.aspx',
+    web: 'https://ycdes.org/webcad/default.aspx',
+  },
+  {
+    // supplementary: adds units and exact coordinates to matching YCDES calls (same box);
+    // calls YCDES doesn't list still show as pager-log calls
+    id: 'york-pager', county: 'York', label: 'York pager', agency: 'York Fire Page', kind: 'pdw-york', feed: 'pager',
     url: 'http://www.yorkfirepage.org/filter.html',
     web: 'http://www.yorkfirepage.org/filter.html',
   },
@@ -328,6 +335,12 @@ async function fetchText(url, attempt = 1) {
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     return await r.text();
   } catch (e) {
+    const transient = e.name === 'AbortError' || (e.name === 'TypeError' && e.cause?.code !== 'UNABLE_TO_VERIFY_LEAF_SIGNATURE');
+    if (transient && attempt === 1) { // a stalled or dropped connection gets the same single retry
+      clearTimeout(timer);
+      await new Promise((res) => setTimeout(res, 1000));
+      return fetchText(url, 2);
+    }
     const cause = e.cause?.code || e.cause?.message;
     throw new Error(cause === 'UNABLE_TO_VERIFY_LEAF_SIGNATURE'
       ? 'TLS: server omits its intermediate certificate (start with npm start, which loads certs/)'
@@ -335,13 +348,68 @@ async function fetchText(url, attempt = 1) {
   } finally { clearTimeout(timer); }
 }
 
+// York: YCDES WebCAD active list. Columns (by header text): Incident Type (category), Dispatch Time,
+// Box No., Incident Type (call type), Street, Cross Street, Nearest Intersection, Location (municipality)
+const YCDES_CAT = { TRAFFIC: 'traffic', FIRE: 'fire', EMS: 'medical', MEDICAL: 'medical', RESCUE: 'rescue', POLICE: 'police' };
+export function parseYcdes(html, src) {
+  const sec = html.match(/<h2[^>]*>\s*Active Incidents\s*<\/h2>\s*<table[^>]*>([\s\S]*?)<\/table>/i);
+  if (!sec) { const e = []; e.unparsed = true; return e; }
+  const rows = [...sec[1].matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi)].map((r) =>
+    [...r[1].matchAll(/<t([hd])[^>]*>([\s\S]*?)<\/t\1>/gi)].map((c) => ({ th: c[1].toLowerCase() === 'h', raw: c[2], text: clean(c[2]) })));
+  const head = rows.find((r) => r.length && r.every((c) => c.th));
+  if (!head) return [];                                   // "There are currently no active incidents."
+  const names = head.map((c) => c.text.toLowerCase());
+  const at = (n) => names.indexOf(n);
+  const typeCols = names.map((n, i) => (n === 'incident type' ? i : -1)).filter((i) => i >= 0);
+  const col = { kind: typeCols.length > 1 ? typeCols[0] : -1, type: typeCols[typeCols.length - 1], time: at('dispatch time'), box: at('box no.'),
+    street: at('street'), cross: at('cross street'), near: at('nearest intersection'), muni: at('location') };
+  if (col.type < 0 || col.time < 0) { const e = []; e.unparsed = true; return e; }
+  const out = [];
+  for (const r of rows) {
+    if (r === head || r.length < names.length - 1 || r.every((c) => c.th)) continue;
+    const g = (k) => (col[k] >= 0 && r[col[k]] ? squash(r[col[k]].text) : '');
+    const type = g('type');
+    if (!type) continue;
+    const street = g('street'), cross = g('cross'), near = g('near');
+    const location = street && cross ? `${street} & ${cross}` : (street || cross || near);
+    const token = (r[r.length - 1]?.raw.match(/Details\.aspx\?([^"'\s>]+)/i) || [])[1];
+    const kind = g('kind').toUpperCase();
+    out.push(finalize(src, {
+      id: token || null, type, location, municipality: g('muni'), box: g('box') || null,
+      time: parseEasternTime(g('time')),
+      category: YCDES_CAT[kind] && !(YCDES_CAT[kind] === 'medical' && classify(type) === 'traffic') ? YCDES_CAT[kind] : undefined,
+    }));
+  }
+  return out;
+}
+
+// Enrich active YCDES calls with units/coordinates from the York pager log (matched on box number);
+// the matched pager calls are dropped so the same call doesn't show twice.
+export function mergeYork(cad, pager) {
+  // box numbers are areas, not calls: also require dispatch times within 20 minutes
+  const used = new Set();
+  for (const c of cad) {
+    const t = Date.parse(c.time || '');
+    const p = c.box && Number.isFinite(t) && pager.find((x) => !used.has(x.id) && x.box === c.box && Math.abs(Date.parse(x.time) - t) <= 20 * 60000);
+    if (!p) continue;
+    used.add(p.id);
+    c.units = [...new Set([...c.units, ...p.units])];
+    c.agencies = [...new Set([...(c.agencies || []), ...(p.agencies || [])])];
+    if (c.lat == null && p.lat != null) { c.lat = p.lat; c.lon = p.lon; }
+    if (!c.place && p.place) c.place = p.place;
+    if (p.major && !c.major) c.major = true;
+  }
+  return pager.filter((p) => !used.has(p.id));
+}
+
 const PARSERS = {
+  ycdes: parseYcdes,
   'lcwc-rss': parseLCWC, chesco: parseChesco, 'arcgis-cumberland': parseCumberland,
   'pdw-york': parseYork, 'pdw-lebanon': parseLebanon,
 };
 
 export async function fetchSource(src) {
-  const base = { id: src.id, county: src.county, agency: src.agency, feed: src.feed, web: src.web, fetchedAt: new Date().toISOString() };
+  const base = { id: src.id, county: src.county, label: src.label || src.county, agency: src.agency, feed: src.feed, web: src.web, fetchedAt: new Date().toISOString() };
   try {
     const body = await fetchText(src.url);
     let incidents = PARSERS[src.kind](body, src);
@@ -351,6 +419,7 @@ export async function fetchSource(src) {
     let status = 'ok';
     if (src.feed === 'pager' && !latest) status = 'unparsed';
     else if (src.feed === 'cad' && src.kind === 'chesco' && !/Incident Status/i.test(body)) status = 'unparsed';
+    else if (incidents.unparsed) status = 'unparsed';
     return { ...base, ok: status === 'ok', status, latest, incidents };
   } catch (e) {
     return { ...base, ok: false, status: 'error', error: String(e.message || e), latest: null, incidents: [] };
@@ -359,6 +428,8 @@ export async function fetchSource(src) {
 
 export async function fetchAll() {
   const results = await Promise.all(SOURCES.map(fetchSource));
+  const yc = results.find((r) => r.id === 'york'), yp = results.find((r) => r.id === 'york-pager');
+  if (yc?.ok && yp) yp.incidents = mergeYork(yc.incidents, yp.incidents);
   const incidents = results.flatMap((r) => r.incidents)
     .sort((a, b) => (Date.parse(b.time || 0) || 0) - (Date.parse(a.time || 0) || 0));
   return {

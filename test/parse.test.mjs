@@ -80,7 +80,7 @@ ${yrow('09:00:00', '11-16-26', 'box: 13-215 LIFT ASSIST , 999 WILSON AVE, YORK T
 </TABLE>`;
 t('York pager: fields, place split, alarm level, grouping, window', () => {
   const now = Date.parse('2026-11-16T21:00:00Z'); // 16:00 ET
-  const r = S.parseYork(YORK, src('york'), now);
+  const r = S.parseYork(YORK, src('york-pager'), now);
   assert.equal(r.latest, '2026-11-16T20:41:47.000Z');
   assert.equal(r.length, 3, '09:00 page is outside the 2 h window; two moto pages merge');
   const moto = r.find((i) => i.box === '89-104');
@@ -124,6 +124,35 @@ t('Lebanon pager: day-first dates, municipality anchor, place/type/unit split', 
   const afa = r.find((i) => i.box === '36-01');
   assert.deepEqual([afa.place, afa.type, afa.category, afa.major], ['Celebration Villa of Lebanon', 'AFA-HIGH RISK', 'fire', true]);
   assert.deepEqual(afa.units, ['E14', 'E16', 'L36', 'STA14']);
+});
+
+// York YCDES WebCAD (verbatim structure 2026-11-18)
+const YCDES = `<h2 align="center">Active Incidents</h2>
+<table class="incidentList" align="center" width="90%">
+<tr><th>Incident Type</th><th>Dispatch Time</th><th>Box No.</th><th>Incident Type</th><th>Street</th><th>Cross Street</th><th>Nearest Intersection</th><th>Location</th><th></th></tr><tr><td>TRAFFIC</td><td>11/18/2026 7:43 AM</td><td>50-30</td><td>MVA NO INJURY</td><td>30 </td><td>GREENWOOD RD</td><td></td><td>WEST MANCHESTER TWP</td><td><a href=Details.aspx?BuRPU8kM21EUhu5bJedagw==>Details</a></td></tr><tr><td>TRAFFIC</td><td>11/18/2026 6:50 AM</td><td>68-83</td><td>MVA NO INJURY</td><td> </td><td> </td><td>EVERGREEN RD, ORCHARD RD / I 83 NB, OAK KNOLL RD</td><td></td><td><a href=Details.aspx?BuRPU8kM21En0/tUVyv8hg==>Details</a></td></tr><tr><td>FIRE</td><td>11/16/2026 3:29 PM</td><td>89-104</td><td>STRUCTURE FIRE RESIDENTIAL</td><td>999 E MARKET ST</td><td>HAINES RD</td><td></td><td>SPRINGETTSBURY TWP</td><td><a href=Details.aspx?abc==>Details</a></td></tr>
+</table><h2 align="center">Road Closures</h2><table class="incidentList"><tr><td>There are currently no active road closures.</td></tr></table>`;
+t('York YCDES: columns by header, location fallback, category, ids, times', () => {
+  const r = S.parseYcdes(YCDES, src('york'));
+  assert.equal(r.length, 3);
+  assert.deepEqual([r[0].type, r[0].location, r[0].municipality, r[0].box, r[0].category], ['MVA NO INJURY', '30 & GREENWOOD RD', 'West Manchester Township', '50-30', 'traffic']);
+  assert.equal(r[0].time, '2026-11-18T12:43:00.000Z');
+  assert.equal(r[0].id, 'york:BuRPU8kM21EUhu5bJedagw==');
+  assert.equal(r[1].location, 'EVERGREEN RD, ORCHARD RD / I 83 NB, OAK KNOLL RD');
+  assert.deepEqual([r[2].category, r[2].major], ['fire', true]);
+  assert.equal(S.parseYcdes('<h2>Active Incidents</h2><table><tr><td>There are currently no active incidents.</td></tr></table>', src('york')).length, 0);
+  assert.equal(S.parseYcdes('<html>maintenance</html>', src('york')).unparsed, true);
+});
+t('York merge: pager units/coords move onto the matching YCDES call', () => {
+  const cad = S.parseYcdes(YCDES, src('york'));
+  const pager = S.parseYork(YORK, src('york-pager'), Date.parse('2026-11-16T21:00:00Z'));
+  const left = S.mergeYork(cad, pager);
+  const fire = cad.find((i) => i.box === '89-104');
+  assert.deepEqual(fire.units, ['FIRESTA891', 'E89-1', 'EMSSTA2-6', 'MICU2-62']);
+  assert.deepEqual([fire.lat, fire.lon], [39.9745, -76.6778]);
+  assert.ok(!left.some((p) => p.box === '89-104'), 'merged pager call is not shown twice');
+  const far = S.parseYcdes(YCDES.replace('11/16/2026 3:29 PM', '11/16/2026 9:00 PM'), src('york'));
+  assert.equal(S.mergeYork(far, S.parseYork(YORK, src('york-pager'), Date.parse('2026-11-16T21:00:00Z'))).length, pager.length, 'same box hours apart is a different call');
+  assert.equal(left.length, pager.length - 1);
 });
 
 // shared
