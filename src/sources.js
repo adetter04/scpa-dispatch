@@ -177,7 +177,7 @@ export function parseChesco(html, src) {
       out.push(finalize(src, {
         id: number, number, type, location, municipality,
         time: parseEasternTime(time),
-        category: secCat === 'medical' && cat !== 'medical' && cat !== 'other' ? cat : secCat,
+        category: (secCat === 'medical' && cat !== 'medical' && cat !== 'other') || cat === 'traffic' ? cat : secCat,
         units: station ? [secCat === 'traffic' ? station : `STA ${station}`] : [],
       }));
     }
@@ -402,6 +402,20 @@ export function mergeYork(cad, pager) {
   return pager.filter((p) => !used.has(p.id));
 }
 
+// Fold the York pager log into the York source so the UI shows one York entry.
+// Matched pager calls enrich YCDES calls (mergeYork); unmatched ones join York as pager-log calls.
+// York's status follows YCDES; if YCDES is down but the pager log is up, York runs on the pager log alone.
+export function combineYork(results) {
+  const yc = results.find((r) => r.id === 'york'), yp = results.find((r) => r.id === 'york-pager');
+  if (!yc || !yp) return results;
+  const extra = yc.ok ? mergeYork(yc.incidents, yp.incidents) : yp.incidents;
+  for (const i of extra) i.source = 'york';
+  yc.incidents = [...yc.incidents, ...extra];
+  yc.pager = { status: yp.status, latest: yp.latest, error: yp.error || null, web: yp.web, windowMin: PAGER_WINDOW_MIN };
+  if (!yc.ok && yp.ok) { yc.pagerOnly = true; yc.cadError = yc.error || yc.status; yc.status = 'ok'; yc.ok = true; delete yc.error; }
+  return results.filter((r) => r !== yp);
+}
+
 const PARSERS = {
   ycdes: parseYcdes,
   'lcwc-rss': parseLCWC, chesco: parseChesco, 'arcgis-cumberland': parseCumberland,
@@ -427,9 +441,7 @@ export async function fetchSource(src) {
 }
 
 export async function fetchAll() {
-  const results = await Promise.all(SOURCES.map(fetchSource));
-  const yc = results.find((r) => r.id === 'york'), yp = results.find((r) => r.id === 'york-pager');
-  if (yc?.ok && yp) yp.incidents = mergeYork(yc.incidents, yp.incidents);
+  const results = combineYork(await Promise.all(SOURCES.map(fetchSource)));
   const incidents = results.flatMap((r) => r.incidents)
     .sort((a, b) => (Date.parse(b.time || 0) || 0) - (Date.parse(a.time || 0) || 0));
   return {

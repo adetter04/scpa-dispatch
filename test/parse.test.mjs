@@ -46,6 +46,8 @@ t('Chester sections, ids, Eastern time', () => {
   assert.deepEqual(r[1].units, ['STA 22']);
   assert.deepEqual(r[2].units, ['42PD']);
   assert.equal(r[1].type, 'FALL / LIFT ASSIST');
+  const ped = S.parseChesco(CHESCO.replace('MEDICAL - BLS ALARM', 'ACCIDENT - PEDESTRIAN STRUCK'), src('chester'));
+  assert.deepEqual([ped[0].category, ped[0].major], ['traffic', true], 'a crash in the fire table is still traffic');
 });
 
 // Cumberland ArcGIS
@@ -153,6 +155,25 @@ t('York merge: pager units/coords move onto the matching YCDES call', () => {
   const far = S.parseYcdes(YCDES.replace('11/16/2026 3:29 PM', '11/16/2026 9:00 PM'), src('york'));
   assert.equal(S.mergeYork(far, S.parseYork(YORK, src('york-pager'), Date.parse('2026-11-16T21:00:00Z'))).length, pager.length, 'same box hours apart is a different call');
   assert.equal(left.length, pager.length - 1);
+});
+
+t('York combine: one York source, pager calls folded in, pager-only fallback', () => {
+  const now = Date.parse('2026-11-16T21:00:00Z');
+  const mk = () => [
+    { id: 'york', county: 'York', ok: true, status: 'ok', incidents: S.parseYcdes(YCDES, src('york')) },
+    { id: 'york-pager', county: 'York', label: 'York pager', ok: true, status: 'ok', latest: '2026-11-16T20:41:47.000Z', web: 'x', incidents: S.parseYork(YORK, src('york-pager'), now) },
+    { id: 'chester', ok: true, status: 'ok', incidents: [] },
+  ];
+  const r = S.combineYork(mk());
+  assert.deepEqual(r.map((x) => x.id), ['york', 'chester'], 'no separate pager source');
+  const y = r[0];
+  assert.ok(y.incidents.every((i) => i.source === 'york'), 'every York call toggles with the York cell');
+  assert.equal(y.incidents.length, 3 + 2, '3 YCDES calls + 2 unmatched pager calls');
+  assert.equal(y.incidents.filter((i) => i.feed === 'pager').length, 2);
+  assert.equal(y.pager.status, 'ok');
+  const down = mk(); Object.assign(down[0], { ok: false, status: 'error', error: 'timed out', incidents: [] });
+  const d = S.combineYork(down)[0];
+  assert.deepEqual([d.ok, d.pagerOnly, d.cadError, d.incidents.length], [true, true, 'timed out', 3]);
 });
 
 // shared
